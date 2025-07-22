@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Data & results
+data/*
+!data/.gitkeep
+results/*
+!results/.gitkeep
+
+# Env
+.env
+.venv/
+.uv/
