@@ -14,6 +14,7 @@ sales_weeks_base AS (
     ms.cod_sucursal,
     m.cod_producto,
     m.cod_talla,
+    m.codigo_sku AS cod_sku,
     f.cod_ano_comercial,
     f.cod_fecha,
     f.cod_semana,
@@ -40,6 +41,7 @@ calendar_base AS (
     b.cod_sucursal,
     b.cod_producto,
     b.cod_talla,
+    b.cod_sku,
     b.cod_ano_comercial,
     b.cod_fecha,
     b.cod_semana,
@@ -74,6 +76,7 @@ SELECT
   cb.cod_sucursal,
   cb.cod_producto,
   cb.cod_talla,
+  cb.cod_sku,
   cb.cod_ano_comercial,
   cb.cod_semana,
   IFNULL(SUM(CASE WHEN fv.cod_fecha = cb.cod_fecha THEN fv.can_unidad ELSE 0 END), 0) AS weekly_sales,
@@ -91,6 +94,7 @@ GROUP BY
   cb.cod_sucursal,
   cb.cod_producto,
   cb.cod_talla,
+  cb.cod_sku,
   cb.cod_ano_comercial,
   cb.cod_semana
 ORDER BY

@@ -35,6 +35,7 @@ def optimize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         "cod_sucursal": "uint16",
         "cod_producto": "uint32",
         "cod_talla": "uint16",
+        "cod_sku": "uint32",
         "cod_ano_comercial": "uint16",
         "cod_semana": "uint8"
     }
@@ -49,6 +50,7 @@ def consolidate_optimized_raw_data(input_path: str, output_path: str) -> None:
     Reads and concatenates all .parquet files in the input_path directory,
     and saves the consolidated DataFrame to output_path.
     """
+    logging.info("Consolidating and optimizing raw data...")
     files = sorted(os.listdir(input_path))
     
     dataframes = []
@@ -56,9 +58,7 @@ def consolidate_optimized_raw_data(input_path: str, output_path: str) -> None:
         if file.endswith(".parquet"):
             logging.info(f"Reading file: {file}")
             df = pd.read_parquet(os.path.join(input_path, file))
-            logging.info(f"     Processing file...")
             df = optimize_dataframe(df)
-            logging.info("     Appending to list...")
             dataframes.append(df)
         else:
             logging.warning(f"Skipping non-parquet file: {file}")
