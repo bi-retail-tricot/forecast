@@ -92,29 +92,36 @@ def process_data(df: pd.DataFrame) -> None:
 
     return df
 
-def etl_process(input_dir: str,
-                output_dir: str) -> None:
+
+def etl_process(input_dir: str, output_dir: str) -> None:
     logging.info("Consolidating and optimizing raw data...")
-    files = sorted(os.listdir(input_dir))
 
-    for file in files:
-        if file.endswith(".parquet"):
-            logging.info(f"##### Reading file: {file} #####")
-            start_time = dt.datetime.now()
+    for root, _, files in os.walk(input_dir):
+        for file in sorted(files):
+            if file.endswith(".parquet"):
+                start_time = dt.datetime.now()
 
-            input_file_path = os.path.join(input_dir, file)
+                input_file_path = os.path.join(root, file)
+                base_name = os.path.splitext(file)[0]
 
-            base_name = os.path.splitext(file)[0]
-            output_file = f"{base_name}_processed.parquet"
-            output_file_path = os.path.join(output_dir, output_file)
+                # Extraer temporada desde el path relativo
+                temporada = os.path.basename(root)
 
-            df = pd.read_parquet(input_file_path)
-            df = process_data(df)
+                # Crear carpeta de salida por temporada
+                output_season_dir = os.path.join(output_dir, temporada)
+                os.makedirs(output_season_dir, exist_ok=True)
 
-            df.to_parquet(output_file_path, index=False)
+                output_file = f"{base_name}_processed.parquet"
+                output_file_path = os.path.join(output_season_dir, output_file)
 
-            logging.info(f"Processed file saved to: {output_file}")
-            elapsed_time = (dt.datetime.now() - start_time).total_seconds()
-            logging.info(f"Time taken to process {file}: {elapsed_time:.0f} seconds")
-        else:
-            logging.warning(f"Skipping non-parquet file: {file}")
+                logging.info(f"Procesando archivo: {input_file_path}")
+                df = pd.read_parquet(input_file_path)
+                df = process_data(df)  # Asegúrate de definir esta función
+
+                df.to_parquet(output_file_path, index=False)
+
+                logging.info(f"Archivo procesado guardado en: {output_file_path}")
+                elapsed_time = (dt.datetime.now() - start_time).total_seconds()
+                logging.info(f"Tiempo de procesamiento: {elapsed_time:.0f} segundos")
+            else:
+                logging.warning(f"Skipping non-parquet file: {file}")

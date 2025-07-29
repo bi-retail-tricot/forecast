@@ -6,7 +6,7 @@ WITH first_date AS (
     MIN(f.cod_fecha) AS first_date_on_store
   FROM `bold-momentum-270218.bo_data.fact_venta_stock_sku_tabla` v
   LEFT JOIN `bold-momentum-270218.bo_data.tabla_fechas_view` f USING(cod_fecha)
-  WHERE can_unidad_stock_fis > 1
+  WHERE can_unidad_stock_fis > 0
   GROUP BY 1, 2, 3
 ),
 sales_weeks_base AS (

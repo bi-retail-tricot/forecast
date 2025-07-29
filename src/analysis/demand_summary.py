@@ -120,36 +120,36 @@ def analyze_demand(df) -> pd.DataFrame:
    
    return demand_summary
 
-def process_demand_analysis(input_dir: str,
-                output_path: str) -> None:
-    logging.info("Consolidating and optimizing raw data...")
-    files = sorted(os.listdir(input_dir))
-
+def process_demand_analysis(input_dir: str, output_path: str) -> None:
+    logging.info("Starting demand analysis process...")
     demand_summary_list = []
-    for file in files:
-        if file.endswith(".parquet"):
-            logging.info(f"##### Reading file: {file} #####")
-            start_time = dt.datetime.now()
-            input_file_path = os.path.join(input_dir, file)
 
-            df = pd.read_parquet(input_file_path)
-            demand_summary = analyze_demand(df)
-            demand_summary_list.append(demand_summary)
+    for root, _, files in os.walk(input_dir):  # Recorre recursivamente
+        for file in sorted(files):
+            if file.endswith(".parquet"):
+                input_file_path = os.path.join(root, file)
+                logging.info(f"##### Reading file: {input_file_path} #####")
+                start_time = dt.datetime.now()
 
-            elapsed_time = (dt.datetime.now() - start_time).total_seconds()
-            logging.info(f"Time taken to process {file}: {elapsed_time:.0f} seconds")
-        else:
-            logging.warning(f"Skipping non-parquet file: {file}")
+                df = pd.read_parquet(input_file_path)
+                demand_summary = analyze_demand(df)  # Esta función debe estar definida
+                demand_summary_list.append(demand_summary)
 
-    logging.info("Combining all demand summaries...")
+                elapsed_time = (dt.datetime.now() - start_time).total_seconds()
+                logging.info(f"Time taken to process {file}: {elapsed_time:.0f} seconds")
+            else:
+                logging.warning(f"Skipping non-parquet file: {file}")
+
     if demand_summary_list:
+        logging.info("Combining all demand summaries...")
         final_demand_summary = pd.concat(demand_summary_list, ignore_index=True)
-        
-        logging.info("Adding dimensions")
+
+        logging.info("Adding dimensions...")
         final_demand_summary = add_dimensions(final_demand_summary)
-        
+
         logging.info("Saving final demand summary to parquet...")
         final_demand_summary.to_parquet(output_path, index=False)
         logging.info(f"Final demand summary saved to: {output_path}")
     else:
         logging.warning("No valid demand summaries to save.")
+    logging.info("Demand analysis process completed.")
