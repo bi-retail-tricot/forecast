@@ -7,11 +7,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 QUERY_DIR = BASE_DIR / "querys"
 
-# Paths a archivos específicos
+# Paths a archivos SQL
 QUERY_TEMPLATE = QUERY_DIR / "sales_query_template.sql"
-WEEKLY_SALES_DIR = DATA_DIR / "raw" / "weekly_sales_all"
 
-OUTPUT_PATH_RAW_WEEKLY_SALES = DATA_DIR / "raw" / "weekly_sales_raw.parquet"
-OUTPUT_PATH_PROCESSED_WEEKLY_SALES = DATA_DIR / "processed" / "weekly_sales_processed.parquet"
+# Directorios de datos
+WEEKLY_SALES_RAW_DIR = DATA_DIR / "raw" / "weekly_sales_by_season"
+WEEKLY_SALES_PROCESSED_DIR = DATA_DIR / "processed" / "weekly_sales_by_season"
 
-OUTPUT_PATH_DEMMAND_SUMMARY = DATA_DIR / "processed" / "demand_summary.parquet"
+# Paths a archivos procesados
+OUTPUT_PATH_DEMAND_SUMMARY = DATA_DIR / "processed" / "demand_summary.parquet"

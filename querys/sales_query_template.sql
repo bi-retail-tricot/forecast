@@ -35,6 +35,7 @@ productos_temporada_filtrados AS (
     (
       (p.nombre_temporada = {nombre_temporada} AND CAST(p.ano_temporada AS INT64) = {ano_temporada})
     )
+    AND p.cod_division = 14 -- Solo productos importados
 ),
 calendar_base AS (
   SELECT
@@ -68,6 +69,14 @@ calendar_base AS (
         {nombre_temporada} = "Verano" AND (
           (b.cod_ano_comercial = {ano_temporada})
           OR (b.cod_ano_comercial = {ano_temporada} + 1 AND b.cod_semana BETWEEN 1 AND 9)
+        )
+      )
+
+      -- Temporada Verano:
+      OR (
+        {nombre_temporada} = "Escolar" AND (
+          (b.cod_ano_comercial = {ano_temporada} - 1)
+          OR (b.cod_ano_comercial = {ano_temporada} AND b.cod_semana BETWEEN 1 AND 9)
         )
       )
     )

@@ -1,2 +1,2 @@
 TEMPORADAS = ["Invierno", "Verano"]
-ANOS = [2025, 2024, 2023, 2022, 2019, 2018]
+ANOS = [2025]
