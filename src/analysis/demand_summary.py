@@ -39,6 +39,17 @@ def summarize_inventory(df: pd.DataFrame) -> pd.DataFrame:
 
    return df_inventory
 
+def summarize_reposition(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute mean and std of weekly reposition for active reposition weeks."""
+    logging.info("Summarizing reposition data...")
+    df_reposition = df.query('week_number > 2 and flag_repo == 1')
+    df_reposition = df_reposition.groupby(GROUPING_COLUMNS, observed=True).agg(
+         weeks_with_reposition=('reposition', 'count'),
+         total_reposition=('reposition', 'sum'),
+    ).reset_index()
+    
+    return df_reposition
+
 def summarize_weeks(df: pd.DataFrame) -> pd.DataFrame:
    """Count number of weeks per SKU and flags of inventory/sales/stockout."""
    logging.info("Summarizing weekly data...")
@@ -51,15 +62,38 @@ def summarize_weeks(df: pd.DataFrame) -> pd.DataFrame:
 
    return df_weeks
 
-def compute_demand_indicators(
-   sales_summary: pd.DataFrame,
-   inventory_summary: pd.DataFrame,
-   weeks_summary: pd.DataFrame) -> pd.DataFrame:
-   """Combine all summaries and compute demand indicators (ADI, CV², etc.)."""
-   logging.info("Computing demand indicators...")
+def combine_summaries(sales_summary: pd.DataFrame,
+                      inventory_summary: pd.DataFrame,
+                      weeks_summary: pd.DataFrame,
+                      reposition_summary: pd.DataFrame) -> pd.DataFrame:
+   """Combine all summaries into a single DataFrame."""
+   logging.info("Merging all summaries...")
    df = weeks_summary.merge(sales_summary, on=GROUPING_COLUMNS, how='left')
    df = df.merge(inventory_summary, on=GROUPING_COLUMNS, how='left')
+   df = df.merge(reposition_summary, on=GROUPING_COLUMNS, how='left')
 
+   df = df.fillna({
+       'total_sales': 0,
+       'mean_sale': 0,
+       #'std_sale': 0,
+       'mean_inventory': 0,
+       #'std_inventory': 0,
+       'max_inventory': 0,
+       'weeks_with_reposition': 0,
+       'total_reposition': 0,
+       'on_season_weeks': 0,
+       'available_inventory_weeks': 0,
+       'sales_weeks': 0,
+       'stockout_weeks': 0
+   })
+
+   del sales_summary, inventory_summary, weeks_summary, reposition_summary
+
+   return df
+
+def compute_demand_indicators(df: pd.DataFrame) -> pd.DataFrame:
+   """Compute demand indicators (ADI, CV², etc.)."""
+   logging.info("Computing demand indicators...")
    df['ADI'] = np.where(
        df['sales_weeks'] > 0,
        df['available_inventory_weeks'] / df['sales_weeks'],
@@ -79,19 +113,75 @@ def compute_demand_indicators(
        np.nan
    )
    df['CV2_inventory'] = df['CV_inventory'] ** 2
+   df['croston_mean_weekly_sales'] = df['mean_sale'] / df['ADI']
+   df['mean_sales_weeks'] = df['mean_inventory'] / df['croston_mean_weekly_sales']
 
    return df
 
-def demand_classification(adi: float, cv2: float) -> str:
-  """Clasifica tipo de demanda según umbrales ADI y CV²"""
-  if adi <= 1.32 and cv2 <= 0.49:
-      return "Suave"
-  elif adi > 1.32 and cv2 <= 0.49:
-      return "Intermitente"
-  elif adi <= 1.32 and cv2 > 0.49:
-      return "Errática"
-  else:
-      return "Irregular"
+def demand_classification_df(df: pd.DataFrame,
+                             adi_col = 'ADI',
+                             cv2_col = 'CV2_sales') -> pd.DataFrame:
+    """
+    Classify demand types based on Syntetos and Boylan (2005):
+    """
+    logging.info("Classifying demand types...")
+    def classify_row(row):
+        adi = row[adi_col]
+        cv2 = row[cv2_col]
+
+        if adi <= 1.32 and cv2 <= 0.49:
+            return "Suave"
+        elif adi > 1.32 and cv2 <= 0.49:
+            return "Intermitente"
+        elif adi <= 1.32 and cv2 > 0.49:
+            return "Errática"
+        else:
+            return "Irregular"
+
+    df['demand_type'] = df.apply(classify_row, axis=1)
+    df['demand_type'] = pd.Categorical(
+        df['demand_type'],
+        categories=["Suave", "Errática", "Intermitente", "Irregular"],
+        ordered=True
+    )
+
+    return df
+
+def demand_data_optimization(df: pd.DataFrame) -> pd.DataFrame:
+    """Optimize data types for memory efficiency."""
+    logging.info("Optimizing data types for memory efficiency...")
+    dtype_optimization_dict = {
+        'on_season_weeks': 'uint8',
+        'available_inventory_weeks': 'uint8',
+        'sales_weeks': 'uint8',
+        'stockout_weeks': 'uint8',
+
+        'total_sales': 'float32',
+        'mean_sale': 'float32',
+        'std_sale': 'float32',
+        'mean_inventory': 'float32',
+        'std_inventory': 'float32',
+        'max_inventory': 'float32',
+
+        'weeks_with_reposition': 'uint8',
+        'total_reposition': 'float32',
+        'ADI': 'float32',
+        'CV_sales': 'float32',
+        'CV2_sales': 'float32',
+        'CV_inventory': 'float32',
+        'CV2_inventory': 'float32',
+        'croston_mean_weekly_sales': 'float32',
+        'mean_sales_weeks': 'float32',
+
+        'demand_type': 'category',
+    }
+
+    df = df.astype(dtype_optimization_dict)
+
+    float_cols = df.select_dtypes(include='float').columns
+    df[float_cols] = df[float_cols].round(4)
+
+    return df
 
 def analyze_demand(df) -> pd.DataFrame:
    """
@@ -106,21 +196,26 @@ def analyze_demand(df) -> pd.DataFrame:
 
    weeks = summarize_weeks(df)
 
-   demand_summary = compute_demand_indicators(sales, inventory, weeks)
+   reposition = summarize_reposition(df)
 
-   logging.info("Cleaning up memory...")
-   del sales, inventory, weeks
-
-   logging.info("Classifying demand types...")
-   demand_summary['demand_type'] = demand_summary.apply(
-       lambda row: demand_classification(row['ADI'], row['CV2_sales']), axis=1
-   )
+   demand_summary = combine_summaries(sales, inventory, weeks, reposition)
    
+   logging.info("Cleaning up memory...")
+   del sales, inventory, weeks, reposition
+
+   demand_summary = compute_demand_indicators(demand_summary)
+
+   demand_summary = demand_classification_df(demand_summary)
+
+   demand_summary = demand_data_optimization(demand_summary)
+
    logging.info("Demand summary completed.")
    
    return demand_summary
 
-def process_demand_analysis(input_dir: str, output_path: str) -> None:
+
+def process_demand_analysis(input_dir: str,
+                            output_path: str) -> None:
     logging.info("Starting demand analysis process...")
     demand_summary_list = []
 
@@ -132,7 +227,7 @@ def process_demand_analysis(input_dir: str, output_path: str) -> None:
                 start_time = dt.datetime.now()
 
                 df = pd.read_parquet(input_file_path)
-                demand_summary = analyze_demand(df)  # Esta función debe estar definida
+                demand_summary = analyze_demand(df)
                 demand_summary_list.append(demand_summary)
 
                 elapsed_time = (dt.datetime.now() - start_time).total_seconds()

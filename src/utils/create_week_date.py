@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import date
+import numpy as np
 
 def add_week_start_date(df,
                         year_col='cod_ano_comercial',
@@ -7,10 +7,15 @@ def add_week_start_date(df,
                         new_col='date'):
     """
     Agrega una columna con la fecha (tipo date) correspondiente al lunes de cada semana
-    usando calendario ISO (ISO-8601).
+    usando calendario ISO (ISO-8601). Versión optimizada.
     """
-    df[new_col] = df.apply(
-        lambda row: date.fromisocalendar(int(row[year_col]), int(row[week_col]), 1),  # 1 = lunes
-        axis=1
+    # Creamos una Serie de strings tipo '2024-32-1' (lunes de la semana)
+    iso_dates = (
+        df[year_col].astype(str) + '-' +
+        df[week_col].astype(str).str.zfill(2) + '-1'
     )
+    
+    # Convertimos usando formato ISO: %G = año ISO, %V = semana ISO, %u = día (1=lunes)
+    df[new_col] = pd.to_datetime(iso_dates, format='%G-%V-%u').dt.date
+    
     return df

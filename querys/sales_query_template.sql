@@ -55,6 +55,13 @@ calendar_base AS (
    AND d.cod_sucursal = b.cod_sucursal
   WHERE 
     b.cod_fecha >= d.first_date_on_store
+    -- Ultimo domingo cerrado antes de la fecha actual
+    AND b.cod_fecha <= (
+      SELECT MAX(cod_fecha)
+      FROM `bold-momentum-270218.bo_data.tabla_fechas_view`
+      WHERE cod_dia = 7 
+        AND cod_fecha <= CAST(FORMAT_DATE('%Y%m%d', CURRENT_DATE()) AS INT64)
+    )
     AND (
       -- Temporada Invierno: semanas 45–52 del año anterior y 1–36 del año base
       (
