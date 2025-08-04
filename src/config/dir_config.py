@@ -20,3 +20,4 @@ GENEX_RAW_PATH = DATA_DIR / "raw" / "genex_data.parquet"
 
 # Paths a archivos procesados
 OUTPUT_PATH_DEMAND_SUMMARY = DATA_DIR / "processed" / "demand_summary.parquet"
+GENEX_PROCESSED_PATH = DATA_DIR / "processed" / "genex_data_processed.parquet"

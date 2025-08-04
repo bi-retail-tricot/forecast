@@ -16,14 +16,6 @@ setup_logging()
 with open(dir_config.QUERY_GENEX, 'r', encoding='utf-8') as file:
     query_genex = file.read()
 
-download_data(
-            query=query_genex,
-            output_path=dir_config.GENEX_RAW_PATH,
-            project_id=PROJECT_ID_GBQ,
-            credentials=CREDENTIALS_GBQ,
-            fast_download=False
-        )
-
 def optimize_genex(file_name: str, output_path: str) -> pd.DataFrame:
     """
     Carga un CSV, optimiza los tipos de datos y guarda el resultado en formato Parquet.
@@ -35,12 +27,17 @@ def optimize_genex(file_name: str, output_path: str) -> pd.DataFrame:
     Retorna:
     - DataFrame optimizado.
     """
-    df = read_csv_log(file_name)
+    logging.info(f"Optimizando archivo: {file_name}")
+    df = pd.read_parquet(file_name, engine='pyarrow')
+    df['cod_talla'] = pd.to_numeric(df['cod_talla'], errors='coerce')
 
     # Conversión de tipos numéricos
     df = df.astype({
         'cod_sucursal': 'uint8',
         'cod_producto': 'uint32',
+        'cod_talla': 'UInt8',
+        'cod_ano_comercial': 'uint16',
+        'cod_semana': 'uint8',
         'vta_periodo': 'uint16',
         'vta_promedio': 'float32',
         'semana_vta': 'uint8',
@@ -53,10 +50,9 @@ def optimize_genex(file_name: str, output_path: str) -> pd.DataFrame:
         'repo_x_dda': 'uint16',
         'can_original': 'uint16',
         'can_final': 'uint16',
+        'estado': 'category',
+        'clasif': 'category',
     })
-
-    # Conversión de fechas
-    #df['semana'] = pd.to_datetime(df['semana'], format='%Y%m%d', errors='coerce')
 
     # Conversión a categorías ordenadas
     df['estado'] = pd.Categorical(df['estado'], ordered=True)
@@ -73,5 +69,35 @@ def optimize_genex(file_name: str, output_path: str) -> pd.DataFrame:
 
 
     # Guardar en Parquet optimizado
-    save_optimized_parquet(df, output_path=output_path, name="data_genex")
-    
+    logging.info(f"Guardando archivo optimizado en: {output_path}")
+    df.to_parquet(
+        output_path,
+        engine='pyarrow',
+        compression='snappy',
+        index=False
+    )
+
+    logging.info(f"Archivo optimizado guardado en: {output_path}")
+    return df
+
+
+def etl_genex(load_data: bool = True,
+              process_data: bool = True):
+    if load_data:
+        download_data(
+            query=query_genex,
+            output_path=dir_config.GENEX_RAW_PATH,
+            project_id=PROJECT_ID_GBQ,
+            credentials=CREDENTIALS_GBQ,
+            fast_download=True,
+        )
+    else:
+        logging.info("Skipping data download for Genex.")
+
+    if process_data:
+        genex_df = optimize_genex(
+            file_name=dir_config.GENEX_RAW_PATH,
+            output_path=dir_config.GENEX_PROCESSED_PATH
+        )
+    else:
+        logging.info("Skipping data processing for Genex.")

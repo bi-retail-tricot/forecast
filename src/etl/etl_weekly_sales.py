@@ -176,14 +176,14 @@ def etl_process(input_dir: str, output_dir: str) -> None:
 
 
 def etl_weekly_sales(
-        download_data: bool,
+        load_data: bool,
         process_data: bool,
         raw_dir: str,
         processed_dir: str) -> None:
     """
     Main ETL function for weekly sales data.
     Args:
-        download_data (bool): Whether to download the data.
+        load_data (bool): Whether to download the data.
         process_data (bool): Whether to process the data.
         analyze_demand (bool): Whether to analyze demand.
         raw_dir (str): Directory for raw data.
@@ -192,7 +192,7 @@ def etl_weekly_sales(
     """
     logging.info("Starting ETL process for weekly sales data...")
     start = dt.datetime.now()
-    if download_data:
+    if load_data:
         extract_sales_data(output_dir=raw_dir)
     else:
         logging.info("Skipping data extraction, using existing data...")
