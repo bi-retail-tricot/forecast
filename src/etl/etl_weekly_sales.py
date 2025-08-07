@@ -4,6 +4,7 @@ from itertools import product
 import os
 import datetime as dt
 import pandas as pd
+import polars as pl
 
 from src.config.bigquery_config import PROJECT_ID_GBQ, CREDENTIALS_GBQ 
 from src.config import dir_config, seasons_to_download
@@ -25,8 +26,8 @@ def generate_query_season(plantilla_sql: str,
             clave = f"{temporada}_{ano}"
             query = plantilla_sql.replace("{nombre_temporada}", f'"{temporada}"').replace("{ano_temporada}", str(ano))
             queries[clave] = query
-    return queries
 
+    return queries
 
 def extract_sales_data(output_dir=None):
     logging.info("Starting data extraction...")
@@ -55,93 +56,176 @@ def extract_sales_data(output_dir=None):
             fast_download=True
         )
 
-
-
-def optimize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+def optimize_dataframe(df: pl.DataFrame) -> pl.DataFrame:
     """
     Optimiza tipos de datos para reducir uso de memoria sin perder precisión.
-    Aplica cast explícito por tipo de variable:
-    - Unidades (uint16)
-    - Montos (float32, redondeados)
-    - Códigos (uint8/uint16/uint32)
     """
+    logging.info("Optimizing dataframe...")
+    
+    # Definir mapeo de columnas y tipos
     unit_columns = ['weekly_sales', 'stock_start_week', 'stock_end_week']
+    money_columns = ['mnt_venta_neta', 'mnt_costo_venta']
+    code_map = {
+        "cod_sucursal": pl.UInt16,
+        "cod_producto": pl.UInt32,
+        "cod_talla": pl.UInt16,
+        "cod_sku": pl.UInt32,
+        "cod_ano_comercial": pl.UInt16,
+        "cod_semana": pl.UInt8
+    }
+    
+    # Crear lista de expresiones para aplicar todas las transformaciones de una vez
+    expressions = []
+    
+    # Unidades (clip y cast a int16)
     for col in unit_columns:
         if col in df.columns:
-            df[col] = df[col].clip(lower=0).astype("int16")
-
-    money_columns = ['mnt_venta_neta', 'mnt_costo_venta']
+            expressions.append(pl.col(col).clip(lower_bound=0).cast(pl.Int16))
+    
+    # Montos (clip, round y cast a float32)
     for col in money_columns:
         if col in df.columns:
-            df[col] = df[col].clip(lower=0).round(3).astype("float32")
-
-    code_map = {
-        "cod_sucursal": "uint16",
-        "cod_producto": "uint32",
-        "cod_talla": "uint16",
-        "cod_sku": "uint32",
-        "cod_ano_comercial": "uint16",
-        "cod_semana": "uint8"
-    }
-
+            expressions.append(pl.col(col).clip(lower_bound=0).round(3).cast(pl.Float32))
+    
+    # Códigos (cast directo)
     for col, dtype in code_map.items():
         if col in df.columns:
-            df[col] = df[col].astype(dtype)
-
+            expressions.append(pl.col(col).cast(dtype))
+    
+    # Aplicar todas las transformaciones de una vez
+    if expressions:
+        df = df.with_columns(expressions)
+    
     return df
 
-def sort_partition(df):
-    df = df.sort_values(by=['cod_sucursal', 'cod_producto', 'cod_talla', 'cod_ano_comercial', 'cod_semana'])
+def sort_partition(df: pl.DataFrame) -> pl.DataFrame:
+    """Ordenamiento de datos"""
+    logging.info("Sorting partition...")
+    return df.sort(['cod_sucursal', 'cod_producto', 'cod_talla', 'cod_ano_comercial', 'cod_semana'])
 
-    return df
-
-def calculate_week_number(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_week_number(df: pl.DataFrame) -> pl.DataFrame:
+    """Calcula número de semana relativo"""
     logging.info("Calculating relative week number...")
-    df['week_number'] = df.groupby(['cod_sucursal', 'cod_producto', 'cod_talla'], observed=True).cumcount() + 1
-    df['week_number'] = df['week_number'].astype('uint8')
-
+    df = df.with_columns([
+        pl.int_range(pl.len())
+        .over(['cod_sucursal', 'cod_producto', 'cod_talla'])
+        .add(1)
+        .cast(pl.UInt8)
+        .alias('week_number')
+    ])
     return df
 
-def calculate_reposition(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_reposition(df: pl.DataFrame) -> pl.DataFrame:
+    """Calcula reposición"""
     logging.info("Calculating reposition...")
-    df['reposition'] = df['stock_end_week'] - df['stock_start_week'] + df['weekly_sales']
-    df['reposition'] = df['reposition'].clip(lower=0).astype('uint16')
-
+    df = df.with_columns([
+        (pl.col('stock_end_week') - pl.col('stock_start_week') + pl.col('weekly_sales'))
+        .clip(lower_bound=0)
+        .cast(pl.UInt16)
+        .alias('reposition')
+    ])
     return df
 
-def calculate_weekly_available_stock(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_weekly_available_stock(df: pl.DataFrame) -> pl.DataFrame:
+    """Calcula stock disponible semanal"""
     logging.info("Calculating weekly available stock...")
-    df['weekly_available_stock'] = df['stock_start_week'] + df['reposition']
-    df['weekly_available_stock'] = df['weekly_available_stock'].astype('int16')
-
+    df = df.with_columns([
+        (pl.col('stock_start_week') + pl.col('reposition'))
+        .cast(pl.Int16)
+        .alias('weekly_available_stock')
+    ])
     return df
 
-def add_week_flags(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_cumulative_sales(df: pl.DataFrame) -> pl.DataFrame:
+    """Calcula ventas acumulativas"""
+    logging.info("Calculating cumulative sales...")
+    df = df.with_columns([
+        pl.col('weekly_sales')
+        .cum_sum()
+        .over(['cod_sucursal', 'cod_producto', 'cod_talla'])
+        .cast(pl.Int16)
+        .alias('cumulative_sales')
+    ])
+    return df
+
+def add_week_flags(df: pl.DataFrame) -> pl.DataFrame:
+    """Agrega banderas de semana"""
     logging.info("Adding week flags...")
-    df['flag_sku_arrival'] = (df['week_number'] == 1).astype('uint8')
-    df['flag_sale'] = (df['weekly_sales'] > 0).astype('uint8')
-    df['flag_inventory_available'] = (df['weekly_available_stock'] > 0).astype('uint8')
-    df['flag_repo'] = (df['reposition'] > 0).astype('uint8')
-    df['flag_stockout'] = ((df['weekly_sales'] > 0) & (df['stock_end_week'] == 0)).astype('uint8')
-
+    df = df.with_columns([
+        (pl.col('week_number') == 1).cast(pl.UInt8).alias('flag_sku_arrival'),
+        (pl.col('weekly_sales') > 0).cast(pl.UInt8).alias('flag_sale'),
+        (pl.col('weekly_available_stock') > 0).cast(pl.UInt8).alias('flag_inventory_available'),
+        (pl.col('reposition') > 0).cast(pl.UInt8).alias('flag_repo'),
+        ((pl.col('weekly_sales') > 0) & (pl.col('stock_end_week') == 0))
+        .cast(pl.UInt8).alias('flag_stockout'),
+        (pl.col('cumulative_sales') == 0).cast(pl.UInt8).alias('flag_without_first_sale')
+    ])
     return df
 
-def process_data(df: pd.DataFrame) -> None:
+def calculate_past_rolling_window(df: pl.DataFrame) -> pl.DataFrame:
+   """
+   Calcula promedio de ventas de las últimas 4 semanas, evitando lookahead bias.
+   Suma explícita de las últimas 4 semanas dividida por 4.
+   """
+   logging.info("Calculating past rolling window...")
+   df = df.with_columns([
+       pl.col('weekly_sales')
+       .shift(1)
+       .rolling_sum(window_size=4, min_periods=1)
+       .truediv(4)
+       .round(3)
+       .over(['cod_sucursal', 'cod_producto', 'cod_talla'])
+       .alias('mean_sales_past_4_weeks')
+   ])
+   return df
+
+def calculate_next_rolling_window(df: pl.DataFrame) -> pl.DataFrame:
+   """
+   Calcula el promedio de ventas de la semana actual + 3 siguientes
+   por cada combinación de sucursal, producto y talla.
+   """
+   logging.info("Calculating next rolling window...")
+
+   df = (
+       df.sort(["cod_sucursal", "cod_producto", "cod_talla", "week_number"])
+       .with_columns([
+           (pl.col("weekly_sales").fill_null(0) + 
+            pl.col("weekly_sales").shift(-1).fill_null(0) + 
+            pl.col("weekly_sales").shift(-2).fill_null(0) + 
+            pl.col("weekly_sales").shift(-3).fill_null(0)
+           ).truediv(4)
+           .round(3)
+           .alias("mean_sales_next_4_weeks")
+           .over(["cod_sucursal", "cod_producto", "cod_talla"])
+       ])
+   )
+
+   return df
+
+def process_data(df: pl.DataFrame) -> pl.DataFrame:
+    """Procesamiento completo de datos"""
     logging.info("Processing data...")
     
+    # Aplicar optimizaciones y ordenamiento
     df = optimize_dataframe(df)
     df = sort_partition(df)
+
+    # Calcular columnas adicionales
     df = calculate_week_number(df)
     df = calculate_reposition(df)
+    df = calculate_cumulative_sales(df)
     df = calculate_weekly_available_stock(df)
+    df = calculate_past_rolling_window(df)
+    df = calculate_next_rolling_window(df)
 
+    # Agregar banderas de semana
     df = add_week_flags(df)
     
     logging.info("Data processing completed successfully.")
-
     return df
 
 def etl_process(input_dir: str, output_dir: str) -> None:
+    """Proceso ETL principal"""
     logging.info("Consolidating and optimizing raw data...")
 
     for root, _, files in os.walk(input_dir):
@@ -163,10 +247,13 @@ def etl_process(input_dir: str, output_dir: str) -> None:
                 output_file_path = os.path.join(output_season_dir, output_file)
 
                 logging.info(f"Processing files: {file}")
-                df = pd.read_parquet(input_file_path)
-                df = process_data(df)  # Asegúrate de definir esta función
+                
+                # Leer y procesar datos
+                df = pl.read_parquet(input_file_path)
+                df = process_data(df)
 
-                df.to_parquet(output_file_path, index=False)
+                # Escribir archivo procesado
+                df.write_parquet(output_file_path)
 
                 logging.info(f"File processed, saved on: {output_file}")
                 elapsed_time = (dt.datetime.now() - start_time).total_seconds()
@@ -174,34 +261,31 @@ def etl_process(input_dir: str, output_dir: str) -> None:
             else:
                 logging.warning(f"Skipping non-parquet file: {file}")
 
-
 def etl_weekly_sales(
         load_data: bool,
         process_data: bool,
         raw_dir: str,
         processed_dir: str) -> None:
     """
-    Main ETL function for weekly sales data.
+    Función ETL principal para datos de ventas semanales.
     Args:
         load_data (bool): Whether to download the data.
         process_data (bool): Whether to process the data.
-        analyze_demand (bool): Whether to analyze demand.
         raw_dir (str): Directory for raw data.
         processed_dir (str): Directory for processed data.
-        demand_summary_path (str): Path for demand summary output.
     """
     logging.info("Starting ETL process for weekly sales data...")
     start = dt.datetime.now()
+    
     if load_data:
         extract_sales_data(output_dir=raw_dir)
     else:
         logging.info("Skipping data extraction, using existing data...")
 
     if process_data:
-        etl_process(input_dir=raw_dir,
-                     output_dir=processed_dir)
+        etl_process(input_dir=raw_dir, output_dir=processed_dir)
     else:
         logging.info("Skipping data processing, using existing processed data...")
     
     total_minutes = (dt.datetime.now() - start).total_seconds() / 60
-    logging.info(f"ETL process for weekly sales in {total_minutes:.1f} minutes.")
+    logging.info(f"ETL process for weekly sales completed in {total_minutes:.1f} minutes.")

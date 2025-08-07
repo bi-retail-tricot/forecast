@@ -1,6 +1,4 @@
 import logging
-import pandas as pd
-import datetime as dt
 
 from src.utils.setup_logging import setup_logging
 
@@ -12,19 +10,21 @@ from src.config.dir_config import (
 
 from src.etl.etl_weekly_sales import etl_weekly_sales
 from src.etl.etl_genex import etl_genex
+from src.etl.etl_trf import etl_trf
 from src.analysis.demand_summary import process_demand_analysis
 
 setup_logging()
 
 
 ETL_SALES = False
-ETL_GENEX = True
+ETL_GENEX = False
+ETL_TRF = True
 DEMAND_ANALYSIS = False
 
 def main():
     if ETL_SALES:
         etl_weekly_sales(
-            load_data=True,
+            load_data=False,
             process_data=True,
             raw_dir=WEEKLY_SALES_RAW_DIR,
             processed_dir=WEEKLY_SALES_PROCESSED_DIR
@@ -32,6 +32,11 @@ def main():
 
     if ETL_GENEX:
         etl_genex(
+            load_data=True,
+            process_data=True
+        )
+    if ETL_TRF:
+        etl_trf(
             load_data=False,
             process_data=True
         )

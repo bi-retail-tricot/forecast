@@ -56,8 +56,9 @@ def summarize_weeks(df: pd.DataFrame) -> pd.DataFrame:
    df_weeks = df.groupby(GROUPING_COLUMNS, observed=True).agg(
        on_season_weeks=('cod_semana', 'count'),
        available_inventory_weeks=('flag_inventory_available', 'sum'),
+       weeks_until_first_sale=('flag_without_first_sale', 'sum'),
        sales_weeks=('flag_sale', 'sum'),
-       stockout_weeks=('flag_stockout', 'sum')
+       stockout_weeks=('flag_stockout', 'sum'),
    ).reset_index()
 
    return df_weeks
@@ -84,7 +85,8 @@ def combine_summaries(sales_summary: pd.DataFrame,
        'on_season_weeks': 0,
        'available_inventory_weeks': 0,
        'sales_weeks': 0,
-       'stockout_weeks': 0
+       'stockout_weeks': 0,
+       'weeks_until_first_sale': 0
    })
 
    del sales_summary, inventory_summary, weeks_summary, reposition_summary
@@ -155,14 +157,13 @@ def demand_data_optimization(df: pd.DataFrame) -> pd.DataFrame:
         'available_inventory_weeks': 'uint8',
         'sales_weeks': 'uint8',
         'stockout_weeks': 'uint8',
-
+        'weeks_until_first_sale': 'uint8',
         'total_sales': 'float32',
         'mean_sale': 'float32',
         'std_sale': 'float32',
         'mean_inventory': 'float32',
         'std_inventory': 'float32',
         'max_inventory': 'float32',
-
         'weeks_with_reposition': 'uint8',
         'total_reposition': 'float32',
         'ADI': 'float32',
@@ -172,7 +173,6 @@ def demand_data_optimization(df: pd.DataFrame) -> pd.DataFrame:
         'CV2_inventory': 'float32',
         'croston_mean_weekly_sales': 'float32',
         'mean_sales_weeks': 'float32',
-
         'demand_type': 'category',
     }
 
