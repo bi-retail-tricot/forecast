@@ -16,15 +16,15 @@ from src.analysis.demand_summary import process_demand_analysis
 setup_logging()
 
 
-ETL_SALES = False
+ETL_SALES = True
 ETL_GENEX = False
-ETL_TRF = True
+ETL_TRF = False
 DEMAND_ANALYSIS = False
 
 def main():
     if ETL_SALES:
         etl_weekly_sales(
-            load_data=False,
+            load_data=True,
             process_data=True,
             raw_dir=WEEKLY_SALES_RAW_DIR,
             processed_dir=WEEKLY_SALES_PROCESSED_DIR

@@ -9,6 +9,22 @@ WITH first_date AS (
   WHERE can_unidad_stock_fis > 0
   GROUP BY 1, 2, 3
 ),
+weekly_price AS
+(
+SELECT
+  cod_sucursal,
+  cod_producto,
+  cod_ano_comercial,
+  cod_semana,
+  fecha_carga,
+  mnt_precio_base,
+  mnt_precio_vigente
+  FROM `bold-momentum-270218.monitoreo_pricing.precio_semanal` ps
+  LEFT JOIN `bold-momentum-270218.bo_data.tabla_fechas_view` tgv
+    ON ps.fecha_carga = tgv.fecha
+  WHERE 
+  cod_dia = 7
+),
 sales_weeks_base AS (
   SELECT
     ms.cod_sucursal,
@@ -95,6 +111,8 @@ SELECT
   cb.cod_sku,
   cb.cod_ano_comercial,
   cb.cod_semana,
+  MAX(weekly_price.mnt_precio_base) AS mnt_precio_base,
+  MAX(weekly_price.mnt_precio_vigente) AS mnt_precio_vigente,
   IFNULL(SUM(CASE WHEN fv.cod_fecha = cb.cod_fecha THEN fv.can_unidad ELSE 0 END), 0) AS weekly_sales,
   IFNULL(SUM(CASE WHEN cb.cod_dia = 1 AND fv.cod_fecha = cb.cod_fecha THEN IFNULL(fv.can_unidad_stock_fis, 0) + IFNULL(fv.can_unidad, 0) ELSE 0 END), 0) AS stock_start_week,
   IFNULL(SUM(CASE WHEN cb.cod_dia = 7 AND fv.cod_fecha = cb.cod_fecha THEN fv.can_unidad_stock_fis ELSE 0 END), 0) AS stock_end_week,
@@ -106,6 +124,11 @@ LEFT JOIN `bold-momentum-270218.bo_data.fact_venta_stock_sku_tabla` fv
  AND fv.cod_talla = cb.cod_talla
  AND fv.cod_sucursal = cb.cod_sucursal
  AND fv.cod_fecha = cb.cod_fecha
+LEFT JOIN weekly_price
+  ON cb.cod_producto = weekly_price.cod_producto
+AND cb.cod_sucursal = weekly_price.cod_sucursal
+AND cb.cod_ano_comercial = weekly_price.cod_ano_comercial
+AND cb.cod_semana = weekly_price.cod_semana
 GROUP BY
   cb.cod_sucursal,
   cb.cod_producto,

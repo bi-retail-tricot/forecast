@@ -71,7 +71,9 @@ def optimize_dataframe(df: pl.DataFrame) -> pl.DataFrame:
         "cod_talla": pl.UInt16,
         "cod_sku": pl.UInt32,
         "cod_ano_comercial": pl.UInt16,
-        "cod_semana": pl.UInt8
+        "cod_semana": pl.UInt8,
+        "mnt_precio_base": pl.UInt32,
+        "mnt_precio_vigente": pl.UInt32,
     }
     
     # Crear lista de expresiones para aplicar todas las transformaciones de una vez
