@@ -5,7 +5,9 @@ __pycache__/
 
 # Data & results
 data/*
+!data/**/*.dvc
 !data/.gitkeep
+
 results/*
 !results/.gitkeep
 
