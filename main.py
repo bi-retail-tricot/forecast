@@ -17,9 +17,9 @@ setup_logging()
 
 
 ETL_SALES = True
-ETL_GENEX = False
-ETL_TRF = False
-DEMAND_ANALYSIS = False
+ETL_GENEX = True
+ETL_TRF = True
+DEMAND_ANALYSIS = True
 
 def main():
     if ETL_SALES:
@@ -37,7 +37,7 @@ def main():
         )
     if ETL_TRF:
         etl_trf(
-            load_data=False,
+            load_data=True,
             process_data=True
         )
     else:

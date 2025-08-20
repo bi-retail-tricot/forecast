@@ -102,6 +102,11 @@ calendar_base AS (
           OR (b.cod_ano_comercial = {ano_temporada} AND b.cod_semana BETWEEN 1 AND 9)
         )
       )
+      OR (
+        {nombre_temporada} = "Toda temporada" AND 
+        (b.cod_ano_comercial = {ano_temporada}) --! Limitar ano temporada, me estoy trayendo todos los años desde 1990
+      )
+
     )
 )
 SELECT
