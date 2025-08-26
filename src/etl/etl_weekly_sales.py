@@ -206,6 +206,44 @@ def calculate_next_rolling_window(df: pl.DataFrame) -> pl.DataFrame:
 
    return df
 
+def add_real_sales_n4(df: pl.DataFrame) -> pl.DataFrame:
+   """
+   Calcula la suma de ventas de la semana actual + 3 siguientes
+   por cada combinación de sucursal, producto y talla.
+   """
+   logging.info("Calculating sales n4...")
+
+   df = (
+       df.sort(["cod_sucursal", "cod_producto", "cod_talla", "week_number"])
+       .with_columns([
+           (pl.col("weekly_sales").fill_null(0) + 
+            pl.col("weekly_sales").shift(-1).fill_null(0) + 
+            pl.col("weekly_sales").shift(-2).fill_null(0) + 
+            pl.col("weekly_sales").shift(-3).fill_null(0)
+           )
+           .round(3)
+           .fill_null(0)
+           .alias("real_sales_n4")
+           .over(["cod_sucursal", "cod_producto", "cod_talla"])
+       ])
+   )
+
+   return df
+
+def create_id(df: pl.DataFrame) -> pl.DataFrame:
+    """Crea un identificador único equivalente al de pandas"""
+    logging.info("Creating unique ID...")
+    df = df.with_columns([
+        (
+            pl.concat_str([
+                pl.col("cod_sucursal").cast(pl.Utf8),
+                pl.col("cod_producto").cast(pl.Utf8),
+                pl.col("cod_talla").cast(pl.Utf8)
+            ])
+        ).alias("id")
+    ])
+    return df
+
 def process_data(df: pl.DataFrame) -> pl.DataFrame:
     """Procesamiento completo de datos"""
     logging.info("Processing data...")
@@ -221,9 +259,13 @@ def process_data(df: pl.DataFrame) -> pl.DataFrame:
     df = calculate_weekly_available_stock(df)
     df = calculate_past_rolling_window(df)
     df = calculate_next_rolling_window(df)
+    df = add_real_sales_n4(df)
 
     # Agregar banderas de semana
     df = add_week_flags(df)
+
+    # Otros
+    df = create_id(df)
     
     logging.info("Data processing completed successfully.")
     return df
