@@ -230,6 +230,51 @@ def add_real_sales_n4(df: pl.DataFrame) -> pl.DataFrame:
 
    return df
 
+def add_real_sales_n6(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Calcula la suma de ventas de la semana actual + 5 siguientes
+    por cada combinación de sucursal, producto y talla.
+    """
+    logging.info("Calculating sales n6...")
+
+    df = (
+        df.sort(["cod_sucursal", "cod_producto", "cod_talla", "week_number"])
+        .with_columns([
+            sum(
+                pl.col("weekly_sales").shift(-i).fill_null(0)
+                for i in range(6)  # 0 = actual + 1..5 siguientes
+            )
+            .round(3)
+            .alias("real_sales_n6")
+            .over(["cod_sucursal", "cod_producto", "cod_talla"])
+        ])
+    )
+
+    return df
+
+def add_real_sales_n8(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Calcula la suma de ventas de la semana actual + 7 siguientes
+    por cada combinación de sucursal, producto y talla.
+    """
+    logging.info("Calculating sales n8...")
+
+    df = (
+        df.sort(["cod_sucursal", "cod_producto", "cod_talla", "week_number"])
+        .with_columns([
+            sum(
+                pl.col("weekly_sales").shift(-i).fill_null(0)
+                for i in range(8)  # 0 = actual, 1..7 siguientes
+            )
+            .round(3)
+            .alias("real_sales_n8")
+            .over(["cod_sucursal", "cod_producto", "cod_talla"])
+        ])
+    )
+
+    return df
+
+
 def create_id(df: pl.DataFrame) -> pl.DataFrame:
     """Crea un identificador único equivalente al de pandas"""
     logging.info("Creating unique ID...")
@@ -260,6 +305,8 @@ def process_data(df: pl.DataFrame) -> pl.DataFrame:
     df = calculate_past_rolling_window(df)
     df = calculate_next_rolling_window(df)
     df = add_real_sales_n4(df)
+    df = add_real_sales_n6(df)
+    df = add_real_sales_n8(df)
 
     # Agregar banderas de semana
     df = add_week_flags(df)

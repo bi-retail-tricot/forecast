@@ -16,7 +16,7 @@ from src.analysis.demand_summary import process_demand_analysis
 setup_logging()
 
 
-ETL_SALES = True
+ETL_SALES = False
 ETL_GENEX = True
 ETL_TRF = True
 DEMAND_ANALYSIS = True

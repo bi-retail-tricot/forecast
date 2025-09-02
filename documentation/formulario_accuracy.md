@@ -4,9 +4,9 @@
 
 $$WAPE = \frac{\sum_{i=1}^{n} |Predicción_i - Valor\ Real_i|}{\sum_{i=1}^{n} Ventas_i}$$
 
-**Qué mide:** Qué tan desviadas están las predicciones en porcentaje, dándole más peso a los productos con mayores ventas.
+**Qué mide:** Qué tan desviadas están las predicciones en relación al total de ventas.
 
-## BIAS (Sesgo)
+## BIAS
 
 $$BIAS = \frac{\sum_{i=1}^{n} (Predicción_i - Valor\ Real_i)}{\sum_{i=1}^{n} Ventas_i}$$
 
@@ -16,7 +16,7 @@ $$BIAS = \frac{\sum_{i=1}^{n} (Predicción_i - Valor\ Real_i)}{\sum_{i=1}^{n} Ve
 
 $$MAE = \frac{1}{n} \sum_{i=1}^{n} |Predicción_i - Valor\ Real_i|$$
 
-**Qué mide:** El promedio de error absoluto en unidades, sin importar si fue por exceso o defecto.
+**Qué mide:** El promedio de error absoluto en unidades, sin importar si fue por exceso o falta de unidades.
 
 ## RMSE (Root Mean Square Error)
 
