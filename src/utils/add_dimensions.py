@@ -18,7 +18,7 @@ def add_dimensions(df):
     # Leer maestro de sucursal
     maestro_sucursal = read_data(
         query="""
-            SELECT cod_sucursal, nombre_sucursal, tipo_sucursal 
+            SELECT cod_sucursal, nombre_sucursal, nombre_tipo_sucursal,  
             FROM `bold-momentum-270218.bo_data.maestro_sucursal`
         """,
         project_id=PROJECT_ID_GBQ,
@@ -44,7 +44,7 @@ def add_dimensions(df):
     # Optimizar columnas categóricas ANTES del merge (reduce memoria en join)
     cat_cols = [
         'nombre_temporada', 'ano_temporada', 'nombre_depto',
-        'nombre_linea', 'nom_talla', 'nombre_sucursal', 'tipo_sucursal'
+        'nombre_linea', 'nom_talla', 'nombre_sucursal', 'nombre_tipo_sucursal'
     ]
 
     for col in cat_cols:

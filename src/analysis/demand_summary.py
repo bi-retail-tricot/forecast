@@ -6,6 +6,7 @@ import datetime as dt
 
 from src.utils.setup_logging import setup_logging
 from src.utils.add_dimensions import add_dimensions
+from src.utils.create_week_date import add_week_start_date
 
 setup_logging()
 
@@ -16,15 +17,46 @@ GROUPING_COLUMNS = [
 def summarize_sales(df: pd.DataFrame) -> pd.DataFrame:
    """Compute mean and std of weekly sales for active sale weeks."""
    logging.info("Summarizing sales data...")
+   
    df_sales = df.query('flag_sale == 1')
+   
    df_sales = df_sales.groupby(GROUPING_COLUMNS, observed=True).agg(
        total_sales=('weekly_sales', 'sum'),
        mean_sale=('weekly_sales', 'mean'),
-       std_sale=('weekly_sales', 'std')
+       std_sale=('weekly_sales', 'std'),
+       mnt_venta_neta_total =('mnt_venta_neta', 'sum'),
+       mnt_costo_venta_total =('mnt_costo_venta', 'sum'), 
    ).reset_index()
 
-   return df_sales
+   df_sales[['mean_sale', 'std_sale']] = df_sales[['mean_sale', 'std_sale']].round(4)
+ 
+   df_sales['mnt_contribucion_total'] = df_sales['mnt_venta_neta_total'] - df_sales['mnt_costo_venta_total']
+   df_sales['mg_total']  = (df_sales['mnt_contribucion_total'] / df_sales['mnt_venta_neta_total']).round(4)
 
+   df_sales['PVP'] = (df_sales['mnt_venta_neta_total'] * 1.19 / df_sales['total_sales']).round(2)
+
+   max_week_per_row = df.groupby(GROUPING_COLUMNS)['week_number'].transform('max')
+
+   df_sales['week_number'] = max_week_per_row
+
+   df_sales = df_sales.merge(
+         df[GROUPING_COLUMNS + ['week_number','cod_ano_comercial','cod_semana', 'stock_end_week']],
+         on=GROUPING_COLUMNS +['week_number'],
+         how='left'
+   )
+
+   df_sales['total_units'] = df_sales['stock_end_week'] + df_sales['total_sales']
+
+   df_sales['evacuation'] = (df_sales['total_sales'] / df_sales['total_units']).round(3)
+
+   df_sales = add_week_start_date(df_sales, 'cod_ano_comercial', 'cod_semana', new_col='last_week_data')
+
+   df_sales = df_sales.drop(columns=['week_number', 'cod_ano_comercial', 'cod_semana'])
+
+   df_sales['last_week_data'] = pd.to_datetime(df_sales['last_week_data']).values.astype("datetime64[D]")
+
+   return df_sales
+   
 def summarize_inventory(df: pd.DataFrame) -> pd.DataFrame:
    """Compute mean and std of inventory usando chunks para optimizar memoria."""
    logging.info("Summarizing inventory data...")
@@ -42,7 +74,9 @@ def summarize_inventory(df: pd.DataFrame) -> pd.DataFrame:
 def summarize_reposition(df: pd.DataFrame) -> pd.DataFrame:
     """Compute mean and std of weekly reposition for active reposition weeks."""
     logging.info("Summarizing reposition data...")
+    
     df_reposition = df.query('week_number > 2 and flag_repo == 1')
+    
     df_reposition = df_reposition.groupby(GROUPING_COLUMNS, observed=True).agg(
          weeks_with_reposition=('reposition', 'count'),
          total_reposition=('reposition', 'sum'),
@@ -93,12 +127,13 @@ def combine_summaries(sales_summary: pd.DataFrame,
 
    return df
 
-def compute_demand_indicators(df: pd.DataFrame) -> pd.DataFrame:
+def compute_demand_indicators(df: pd.DataFrame,
+                              until_sale = True) -> pd.DataFrame:
    """Compute demand indicators (ADI, CV², etc.)."""
    logging.info("Computing demand indicators...")
    df['ADI'] = np.where(
        df['sales_weeks'] > 0,
-       df['available_inventory_weeks'] / df['sales_weeks'],
+       (df['available_inventory_weeks'] - df['weeks_until_first_sale'] * until_sale) / df['sales_weeks'],
        np.nan
    )
 
@@ -114,8 +149,11 @@ def compute_demand_indicators(df: pd.DataFrame) -> pd.DataFrame:
        df['std_inventory'] / df['mean_inventory'],
        np.nan
    )
+   
    df['CV2_inventory'] = df['CV_inventory'] ** 2
+   
    df['croston_mean_weekly_sales'] = df['mean_sale'] / df['ADI']
+   
    df['mean_sales_weeks'] = df['mean_inventory'] / df['croston_mean_weekly_sales']
 
    return df
