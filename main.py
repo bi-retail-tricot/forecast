@@ -17,8 +17,8 @@ setup_logging()
 
 
 ETL_SALES = False
-ETL_GENEX = True
-ETL_TRF = True
+ETL_GENEX = False
+ETL_TRF = False
 DEMAND_ANALYSIS = True
 
 def main():
