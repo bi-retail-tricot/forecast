@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def add_week_start_date(df, year_col, week_col, new_col="week_start"):
+def add_week_start_date(df, year_col = 'cod_ano_comercial', week_col = 'cod_semana', new_col="week_start_date"):
     """
     Agrega una columna con la fecha (datetime64[D]) correspondiente al lunes
     de cada semana ISO (ISO-8601).

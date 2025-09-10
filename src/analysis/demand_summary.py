@@ -11,7 +11,7 @@ from src.utils.create_week_date import add_week_start_date
 setup_logging()
 
 GROUPING_COLUMNS = [
-   'cod_sucursal', 'cod_producto', 'cod_talla', 'cod_sku'
+   'id','cod_sucursal', 'cod_producto', 'cod_talla', 'cod_sku'
 ]
 
 def summarize_sales(df: pd.DataFrame) -> pd.DataFrame:
@@ -21,19 +21,12 @@ def summarize_sales(df: pd.DataFrame) -> pd.DataFrame:
    df_sales = df.query('flag_sale == 1')
    
    df_sales = df_sales.groupby(GROUPING_COLUMNS, observed=True).agg(
-       total_sales=('weekly_sales', 'sum'),
-       mean_sale=('weekly_sales', 'mean'),
-       std_sale=('weekly_sales', 'std'),
-       mnt_venta_neta_total =('mnt_venta_neta', 'sum'),
-       mnt_costo_venta_total =('mnt_costo_venta', 'sum'), 
-   ).reset_index()
-
-   df_sales[['mean_sale', 'std_sale']] = df_sales[['mean_sale', 'std_sale']].round(4)
- 
-   df_sales['mnt_contribucion_total'] = df_sales['mnt_venta_neta_total'] - df_sales['mnt_costo_venta_total']
-   df_sales['mg_total']  = (df_sales['mnt_contribucion_total'] / df_sales['mnt_venta_neta_total']).round(4)
-
-   df_sales['PVP'] = (df_sales['mnt_venta_neta_total'] * 1.19 / df_sales['total_sales']).round(2)
+        total_sales=('weekly_sales', 'sum'),
+        mean_sale=('weekly_sales', 'mean'),
+        std_sale=('weekly_sales', lambda x: np.std(x, ddof=0)),
+        mnt_venta_neta_total=('mnt_venta_neta', 'sum'),
+        mnt_costo_venta_total=('mnt_costo_venta', 'sum')
+    ).reset_index()
 
    max_week_per_row = df.groupby(GROUPING_COLUMNS)['week_number'].transform('max')
 
@@ -44,10 +37,32 @@ def summarize_sales(df: pd.DataFrame) -> pd.DataFrame:
          on=GROUPING_COLUMNS +['week_number'],
          how='left'
    )
+   
+   df_sales[['mean_sale', 'std_sale']] = df_sales[['mean_sale', 'std_sale']].round(4)
 
-   df_sales['total_units'] = df_sales['stock_end_week'] + df_sales['total_sales']
+   df_sales[['total_sales','stock_end_week']] = df_sales[['total_sales','stock_end_week']].fillna(0)
 
-   df_sales['evacuation'] = (df_sales['total_sales'] / df_sales['total_units']).round(3)
+   df_sales['total_units'] = (df_sales['stock_end_week'] + df_sales['total_sales']).fillna(0)
+
+   df_sales['mnt_contribucion_total'] = df_sales['mnt_venta_neta_total'].fillna(0) - df_sales['mnt_costo_venta_total'].fillna(0)
+
+   df_sales['mg_total']  =np.where(
+       df_sales['mnt_venta_neta_total'] > 0,
+        (df_sales['mnt_contribucion_total'] / df_sales['mnt_venta_neta_total']).round(4),
+        np.nan
+   )
+
+   df_sales['PVP'] = np.where(
+         df_sales['total_sales'] > 0,
+         (df_sales['mnt_venta_neta_total'] * 1.19 / df_sales['total_sales']).round(2),
+            np.nan
+    )
+
+   df_sales['evacuation'] = np.where(
+       df_sales['total_units'] > 0,
+       (df_sales['total_sales'] / df_sales['total_units']).round(4),
+       np.nan
+   )
 
    df_sales = add_week_start_date(df_sales, 'cod_ano_comercial', 'cod_semana', new_col='last_week_data')
 
@@ -65,7 +80,7 @@ def summarize_inventory(df: pd.DataFrame) -> pd.DataFrame:
 
    df_inventory = df_inventory.groupby(GROUPING_COLUMNS, observed=True).agg(
        mean_inventory=('weekly_available_stock', 'mean'),
-       std_inventory=('weekly_available_stock', 'std'),
+       std_inventory=('weekly_available_stock', lambda x: np.std(x, ddof=0)),
        max_inventory=('weekly_available_stock', 'max'),
    ).reset_index()
 
