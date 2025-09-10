@@ -35,6 +35,7 @@ def optimize_genex(file_name: str, output_path: str) -> pd.DataFrame:
     df = df.astype({
         'cod_sucursal': 'uint8',
         'cod_producto': 'uint32',
+        'cod_sku': 'uint32',
         'cod_talla': 'UInt8',
         'cod_ano_comercial': 'uint16',
         'cod_semana': 'uint8',
